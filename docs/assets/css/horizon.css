@@ -189,3 +189,20 @@ h1, h2, h3, h4, h5, h6 {
 .lang-section.hidden {
   display: none;
 }
+
+/* --- Traffic Stats --- */
+.traffic-stats {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.8em 1.6em;
+  margin-top: 3em;
+  padding: 1em 0;
+  border-top: 1px solid var(--hz-border);
+  color: var(--hz-text-muted);
+  font-size: 0.85em;
+}
+
+.traffic-stats strong {
+  color: var(--hz-accent);
+}

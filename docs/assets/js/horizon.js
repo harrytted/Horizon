@@ -124,9 +124,24 @@
     }
   }
 
+  /** Show site and page traffic counters below the main content */
+  function setupTrafficStats() {
+    var content = document.querySelector('.main-content');
+    if (!content) return;
+
+    var stats = document.createElement('div');
+    stats.className = 'traffic-stats';
+    stats.innerHTML =
+      '<span>总访问量 <strong id="busuanzi_site_pv">加载中...</strong></span>' +
+      '<span>访客数 <strong id="busuanzi_site_uv">加载中...</strong></span>' +
+      '<span>本页阅读 <strong id="busuanzi_page_pv">加载中...</strong></span>';
+    content.appendChild(stats);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     processScoreBadges();
     markSemanticElements();
     setupLanguageToggle();
+    setupTrafficStats();
   });
 })();
