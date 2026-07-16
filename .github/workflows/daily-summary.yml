@@ -2,8 +2,9 @@ name: Daily Horizon Summary
 
 on:
   schedule:
-    # GitHub scheduled workflows use UTC. 02:07 UTC is 10:07 Asia/Shanghai.
-    # Avoid minute 0, when scheduled workflow load is highest.
+    # Three retries at 08:07, 09:07, and 10:07 Asia/Shanghai.
+    - cron: '7 0 * * *'
+    - cron: '7 1 * * *'
     - cron: '7 2 * * *'
   workflow_dispatch:      # Allow manual trigger
 
@@ -17,21 +18,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Check whether today's summary already exists
+        id: daily-summary
+        if: github.event_name == 'schedule'
+        run: |
+          DATE=$(TZ=Asia/Shanghai date +'%Y-%m-%d')
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages --depth=1 || true
+          if git cat-file -e "origin/gh-pages:_posts/${DATE}-summary-zh.md" 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Summary for ${DATE} already exists; skipping this retry."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.daily-summary.outputs.exists != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install uv
+        if: steps.daily-summary.outputs.exists != 'true'
         uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
+        if: steps.daily-summary.outputs.exists != 'true'
         run: uv sync
 
       - name: Prepare GitHub Actions config
+        if: steps.daily-summary.outputs.exists != 'true'
         run: cp data/config.github.json data/config.json
 
       - name: Run Horizon
+        if: steps.daily-summary.outputs.exists != 'true'
         env:
           # Map secrets to environment variables expected by config.json
           # Modify these based on your data/config.github.json provider settings
@@ -43,9 +62,11 @@ jobs:
         run: uv run horizon --hours 24
 
       - name: Set current date as environment variable
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        if: steps.daily-summary.outputs.exists != 'true'
+        run: echo "DATE=$(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Deploy to GitHub Pages
+        if: steps.daily-summary.outputs.exists != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
