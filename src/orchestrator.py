@@ -31,6 +31,23 @@ from .ai.enricher import ContentEnricher
 from .ai.tokens import get_usage_snapshot
 
 
+def resolve_run_window(
+    force_hours: Optional[int] = None,
+    target_date: Optional[str] = None,
+) -> tuple[datetime, Optional[datetime], str]:
+    """Resolve the fetch window and output date for a normal or backfill run."""
+    if target_date:
+        try:
+            start = datetime.strptime(target_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError as exc:
+            raise ValueError("target date must use YYYY-MM-DD format") from exc
+        return start, start + timedelta(days=1), target_date
+
+    now = datetime.now(timezone.utc)
+    hours = force_hours or 24
+    return now - timedelta(hours=hours), None, now.strftime("%Y-%m-%d")
+
+
 @dataclass
 class BalancedDigestResult:
     """Items and selection statistics from balanced digest filtering."""
@@ -62,7 +79,7 @@ class HorizonOrchestrator:
             else None
         )
 
-    async def run(self, force_hours: int = None) -> None:
+    async def run(self, force_hours: int = None, target_date: str = None) -> None:
         """Execute the complete workflow.
 
         Args:
@@ -82,11 +99,21 @@ class HorizonOrchestrator:
 
         try:
             # 1. Determine time window
-            since = self._determine_time_window(force_hours)
+            if target_date:
+                since, until, output_date = resolve_run_window(force_hours, target_date)
+            else:
+                since = self._determine_time_window(force_hours)
+                until = None
+                output_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             self.console.print(f"📅 Fetching content since: {since.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
             # 2. Fetch content from all sources
             all_items = await self.fetch_all_sources(since)
+            if until:
+                all_items = [
+                    item for item in all_items
+                    if item.published_at is None or item.published_at < until
+                ]
             self.console.print(f"📥 Fetched {len(all_items)} items from all sources\n")
 
             if not all_items:
@@ -146,7 +173,7 @@ class HorizonOrchestrator:
             await self._enrich_important_items(important_items)
 
             # 7. Generate and save daily summaries for each configured language
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = output_date
             for lang in self.config.ai.languages:
                 summarizer = DailySummarizer()
                 summary = await summarizer.generate_summary(important_items, today, len(all_items), language=lang)

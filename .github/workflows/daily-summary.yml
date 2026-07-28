@@ -6,7 +6,12 @@ on:
     - cron: '7 0 * * *'
     - cron: '7 1 * * *'
     - cron: '7 2 * * *'
-  workflow_dispatch:      # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: 'Optional UTC date to backfill (YYYY-MM-DD)'
+        required: false
+        type: string
 
 jobs:
   daily-summary:
@@ -59,11 +64,19 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           LWN_KEY: ${{ secrets.LWN_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: uv run horizon --hours 24
+          TARGET_DATE: ${{ inputs.target_date }}
+        run: |
+          if [ -n "$TARGET_DATE" ]; then
+            uv run horizon --hours 24 --date "$TARGET_DATE"
+          else
+            uv run horizon --hours 24
+          fi
 
       - name: Set current date as environment variable
         if: steps.daily-summary.outputs.exists != 'true'
-        run: echo "DATE=$(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> $GITHUB_ENV
+        env:
+          TARGET_DATE: ${{ inputs.target_date }}
+        run: echo "DATE=${TARGET_DATE:-$(TZ=Asia/Shanghai date +'%Y-%m-%d')}" >> $GITHUB_ENV
 
       - name: Deploy to GitHub Pages
         if: steps.daily-summary.outputs.exists != 'true'
